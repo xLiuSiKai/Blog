@@ -1,0 +1,63 @@
+name: Deploy to Server
+
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  deploy:
+    name: Deploy
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v2
+
+      - name: Installation Node
+        uses: actions/setup-node@v1
+        with:
+          node-version: "16.x"
+
+      - name: Installation Hexo
+        run: |
+          export TZ='Asia/Shanghai'
+          npm install hexo-cli -g
+
+      - name: Download Dependencies
+        run: |
+          npm install gulp-cli -g
+          npm install --save
+
+      - name: Generate File
+        run: |
+          hexo clean
+          hexo generate
+          gulp
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: 3.9
+
+      - name: Setup coscmd and sdk
+        run: sudo pip install coscmd
+
+      - name: Configure coscmd
+        env:
+          SECRET_ID: ${{ secrets.SecretId }}
+          SECRET_KEY: ${{ secrets.SecretKey }}
+          BUCKET: ${{ secrets.Bucket }}
+          REGION: ${{ secrets.Region }}
+        run: coscmd config -a $SECRET_ID -s $SECRET_KEY -b $BUCKET -r $REGION
+
+      - name: Upload to COS
+        run: coscmd upload -rfs --delete public/ /
+
+      - name: Flush CDN
+        env:
+          SECRET_ID: ${{ secrets.SecretId }}
+          SECRET_KEY: ${{ secrets.SecretKey }}
+        run: |
+          pip install --upgrade tencentcloud-sdk-python
+          python flush-cdn.py    
